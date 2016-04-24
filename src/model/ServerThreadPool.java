@@ -42,9 +42,7 @@ public class ServerThreadPool extends Thread {
             removeThread(serverThreads.get(id));
         } else {
             for (ServerThread serverThread : serverThreads.values()) {
-                if (id != serverThread.getSessionId()) {
-                    serverThread.send(id + ": " + input);
-                }
+                serverThread.send(input);
             }
         }
     }

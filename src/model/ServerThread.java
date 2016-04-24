@@ -41,11 +41,13 @@ public class ServerThread extends Thread {
     }
 
     public void run() {
-        while (run) try {
-            server.distributeMessages(sessionId, streamIn.readUTF());
-        } catch (IOException e) {
-            System.out.println("Error in ServerThread.run: " + e.getMessage());
-            server.removeThread(this);
+        while (run) {
+            try {
+                server.distributeMessages(sessionId, streamIn.readUTF());
+            } catch (IOException e) {
+                System.out.println("Error in ServerThread.run: " + e.getMessage());
+                server.removeThread(this);
+            }
         }
     }
 
