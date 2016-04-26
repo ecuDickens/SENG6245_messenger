@@ -21,7 +21,7 @@ public class ClientStart {
             public void run() {
                 try {
                     setLookAndFeel(getSystemLookAndFeelClassName());
-                    final Socket socket = new Socket(args[0], Integer.parseInt(args[1]));
+                    final Socket socket = new Socket("localhost", 1234);
                     new Client(socket, new DataInputStream(socket.getInputStream()), new DataOutputStream(socket.getOutputStream()));
                 } catch (Exception e) {
                     System.out.println("Error in ClientStart.main: " + e.getMessage());
