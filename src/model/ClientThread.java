@@ -9,6 +9,7 @@ import java.util.HashSet;
 import static model.Message.toMessage;
 import static model.enums.MessageTypeEnum.GET_USERS;
 import static model.enums.MessageTypeEnum.INVITE_ACCEPT;
+import static model.enums.MessageTypeEnum.INVITE_DECLINE;
 
 public class ClientThread extends Thread {
     private Client client;
@@ -54,7 +55,7 @@ public class ClientThread extends Thread {
 
     private void processMessage(final Message message) {
         if (null == message) {
-            System.out.println("Bad message received.");
+            client.alert(client.getMainFrame(), "Error", "Bad message received.");
             return;
         }
         switch(message.getType()) {
@@ -64,39 +65,45 @@ public class ClientThread extends Thread {
                         .withSourceUser(client.getSourceUserName()));
                 break;
             case LOGIN_DENIED:
-                client.setLoginMessage(message.getText());
+                client.alert(client.getLoginFrame(), "Error", message.getText());
+                break;
             case GET_USERS:
-                client.displayUsers(new HashSet<>(Arrays.asList(message.getText().split(","))));
+                client.displayMain(new HashSet<>(Arrays.asList(message.getText().split(","))));
                 break;
             case INVITE:
-                send(new Message()
-                        .withType(INVITE_ACCEPT)
-                        .withSourceUser(message.getTargetUser())
-                        .withTargetUser(message.getSourceUser()));
-                client.openChatBox(message.getSourceUser());
+                if (client.displayInvite(message.getSourceUser()) == 0) {
+                    send(new Message()
+                            .withType(INVITE_ACCEPT)
+                            .withSourceUser(client.getSourceUserName())
+                            .withTargetUser(message.getSourceUser()));
+                    client.openChatBox(message.getSourceUser());
+                } else {
+                    send(new Message()
+                            .withType(INVITE_DECLINE)
+                            .withSourceUser(client.getSourceUserName())
+                            .withTargetUser(message.getSourceUser()));
+                }
                 break;
             case INVITE_ACCEPT:
                 client.openChatBox(message.getSourceUser());
                 break;
             case INVITE_DECLINE:
+                client.alert(client.getMainFrame(), null, message.getSourceUser() + " declined your chat request.");
                 break;
             case SESSION_EXIT:
-                client.addMessage(message.getSourceUser(), "Left chat");
+                client.alert(client.getChatFrame(message.getSourceUser()), null, message.getSourceUser() + " declined your chat request.");
                 break;
             case TYPING:
-                client.addMessage(message.getSourceUser(), "Is typing");
+                client.getChatFrame(message.getSourceUser()).setTitle(client.getSourceUserName() + " -> " + message.getSourceUser() + " is typing");
                 break;
             case NOT_TYPING:
-                client.addMessage(message.getSourceUser(), "Stopped typing");
-                break;
-            case TEXT_CLEARED:
-                client.addMessage(message.getSourceUser(), "Cleared text");
+                client.getChatFrame(message.getSourceUser()).setTitle(client.getSourceUserName() + " -> " + message.getSourceUser());
                 break;
             case MESSAGE:
                 client.addMessage(message.getSourceUser(), message.getText());
                 break;
             default:
-                client.addMessage(message.getSourceUser(), "Error: " + message.getText());
+                client.alert(client.getMainFrame(), "Error", message.toString());
                 break;
         }
     }

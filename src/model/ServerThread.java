@@ -105,13 +105,15 @@ public class ServerThread extends Thread {
                     send(new Message()
                             .withType(LOGIN_DENIED)
                             .withSourceUser(SERVER)
+                            .withTargetUser(message.getSourceUser())
                             .withText("Username already exists."));
                 } else {
                     server.addActiveUser(message.getSourceUser());
                     this.userName = message.getSourceUser();
                     send(new Message()
                             .withType(LOGIN_ACK)
-                            .withSourceUser(SERVER));
+                            .withSourceUser(SERVER)
+                            .withTargetUser(message.getSourceUser()));
                 }
                 break;
             case GET_USERS:

@@ -136,5 +136,6 @@ public class Server extends Thread {
     public synchronized void removeThread(final ServerThread thread) {
         activeUsers.remove(thread.getUserName());
         threadIdToUser.remove(thread.getThreadId());
+        thread.close();
     }
 }

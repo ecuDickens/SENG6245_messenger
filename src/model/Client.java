@@ -1,6 +1,8 @@
 package model;
 
 import javax.swing.*;
+import javax.swing.event.DocumentEvent;
+import javax.swing.event.DocumentListener;
 import java.awt.*;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
@@ -14,7 +16,9 @@ import static model.enums.MessageTypeEnum.GET_USERS;
 import static model.enums.MessageTypeEnum.INVITE;
 import static model.enums.MessageTypeEnum.LOGIN;
 import static model.enums.MessageTypeEnum.MESSAGE;
+import static model.enums.MessageTypeEnum.NOT_TYPING;
 import static model.enums.MessageTypeEnum.SESSION_EXIT;
+import static model.enums.MessageTypeEnum.TYPING;
 
 public class Client {
 
@@ -23,7 +27,8 @@ public class Client {
     private String sourceUserName;
 
     private JFrame loginFrame;
-    private JTextField loginNameField;
+    private JFrame mainFrame;
+    private DefaultListModel<String> listModel;
     private Map<String, ChatBox> userNameToChatBox;
 
     public Client(final Socket socket,
@@ -32,16 +37,25 @@ public class Client {
         this.socket = socket;
         this.thread = new ClientThread(this, in, out);
         this.userNameToChatBox = new HashMap<>();
-
+        this.mainFrame = null;
         displayLogin();
     }
 
     public String getSourceUserName() {
         return sourceUserName;
     }
+    public JFrame getLoginFrame() {
+        return loginFrame;
+    }
+    public JFrame getMainFrame() {
+        return mainFrame;
+    }
+    public JFrame getChatFrame(final String userName) {
+        return userNameToChatBox.get(userName).getChatFrame();
+    }
 
     private void displayLogin() {
-        loginNameField = new JTextField(15);
+        final JTextField loginNameField = new JTextField(15);
         final JButton loginButton = new JButton("Login");
         loginButton.addActionListener(event -> {
             sourceUserName = loginNameField.getText();
@@ -57,46 +71,86 @@ public class Client {
         loginFrame = new JFrame();
         loginFrame.add(BorderLayout.CENTER, loginPanel);
         loginFrame.add(BorderLayout.SOUTH, loginButton);
-        loginFrame.setSize(300, 300);
+        loginFrame.pack();
         loginFrame.setVisible(true);
     }
 
-    public void setLoginMessage(final String message) {
-        loginNameField.setText(message);
+    public void alert(final JFrame jFrame, final String subject, final String message) {
+        JOptionPane.showMessageDialog(jFrame, message, subject, JOptionPane.PLAIN_MESSAGE);
     }
 
-    public void displayUsers(final Set<String> userNames) {
-        final JFrame userNameFrame = new JFrame();
-
-        for (String userName : userNames) {
-            final JButton selectUserButton = new JButton(userName);
-            selectUserButton.addActionListener(event ->
-                thread.send(new Message()
-                    .withType(INVITE)
-                    .withSourceUser(sourceUserName)
-                    .withTargetUser(userName)));
-            userNameFrame.add(selectUserButton);
+    public void displayMain(final Set<String> userNames) {
+        // If already created, this call is simply to update the list.
+        if (null != mainFrame) {
+            listModel.clear();
+            for (String userName : userNames) {
+                if (!sourceUserName.equals(userName)) {
+                    listModel.addElement(userName);
+                }
+            }
+            return;
         }
 
-        final JButton refreshButton = new JButton("Refresh Users");
-        refreshButton.addActionListener(event ->
-                thread.send(new Message()
-                    .withType(GET_USERS)
-                    .withSourceUser(sourceUserName)));
+        listModel = new DefaultListModel<>();
+        final JList<String> userNameList = new JList<>(listModel);
+        final JButton refreshButton = new JButton("Refresh");
+        final JButton inviteButton = new JButton("Invite");
 
-        final JPanel userNamePanel = new JPanel(new GridBagLayout());
-        userNamePanel.add(new JLabel("Active users, select one to chat."));
+        for (String userName : userNames) {
+            if (!sourceUserName.equals(userName)) {
+                listModel.addElement(userName);
+            }
+        }
 
-        userNameFrame.add(userNamePanel);
-        userNameFrame.add(refreshButton);
-        userNameFrame.setSize(300, 300);
-        userNameFrame.setVisible(true);
+        userNameList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+        userNameList.setSelectedIndex(0);
+        userNameList.setVisibleRowCount(5);
+
+        // Set up refresh button.
+        refreshButton.setActionCommand("Refresh");
+        refreshButton.addActionListener(event -> thread.send(new Message()
+                .withType(GET_USERS)
+                .withSourceUser(sourceUserName)));
+
+        // Set up Invite button.
+        inviteButton.setActionCommand("Invite");
+        inviteButton.addActionListener(event -> thread.send(new Message()
+                .withType(INVITE)
+                .withSourceUser(sourceUserName)
+                .withTargetUser(userNameList.getSelectedValue())));
+
+        // Add everything to the content pane.
+        final JPanel buttonPane = new JPanel();
+        buttonPane.setLayout(new BoxLayout(buttonPane, BoxLayout.LINE_AXIS));
+        buttonPane.add(refreshButton);
+        buttonPane.add(Box.createHorizontalStrut(5));
+        buttonPane.add(new JSeparator(SwingConstants.VERTICAL));
+        buttonPane.add(Box.createHorizontalStrut(5));
+        buttonPane.add(inviteButton);
+        buttonPane.setBorder(BorderFactory.createEmptyBorder(5,5,5,5));
+
+        final JPanel newContentPane = new JPanel(new BorderLayout());
+        newContentPane.add(new JScrollPane(userNameList), BorderLayout.CENTER);
+        newContentPane.add(buttonPane, BorderLayout.PAGE_END);
+        newContentPane.setOpaque(true);
+
+        mainFrame = new JFrame(sourceUserName + ": Active Users List");
+        mainFrame.setContentPane(newContentPane);
+        mainFrame.pack();
+        mainFrame.setVisible(true);
         loginFrame.setVisible(false);
+    }
+
+    public int displayInvite(final String userName) {
+        return JOptionPane.showConfirmDialog(mainFrame,
+                "Incoming chat request from " +userName+ ".  Accept?",
+                "Chat request",
+                JOptionPane.YES_NO_OPTION);
     }
 
     public void addMessage(final String userName, final String text) {
         if (userNameToChatBox.containsKey(userName)) {
-            userNameToChatBox.get(userName).getChatBox().append(text + "\n");
+            userNameToChatBox.get(userName).getChatBox().append(String.format("<%s>: %s\n", userName, text));
         }
     }
 
@@ -123,9 +177,11 @@ public class Client {
         private String targetUserName;
         private JFrame chatFrame;
         private JTextArea chatBox;
+        private boolean isTyping;
 
         public ChatBox(final String targetUserName) {
             this.targetUserName = targetUserName;
+            this.isTyping = false;
             displayChatBox();
         }
 
@@ -137,9 +193,41 @@ public class Client {
         }
 
         public void displayChatBox() {
-            chatFrame = new JFrame();
+            chatFrame = new JFrame(sourceUserName + " -> " + targetUserName);
             final JTextField messageBox = new JTextField(30);
             messageBox.requestFocusInWindow();
+            messageBox.getDocument().addDocumentListener(new DocumentListener() {
+                @Override
+                public void insertUpdate(DocumentEvent e) {
+                    if (!isTyping) {
+                        thread.send(new Message()
+                                .withType(TYPING)
+                                .withSourceUser(sourceUserName)
+                                .withTargetUser(targetUserName));
+                        isTyping = true;
+                    }
+                }
+                @Override
+                public void removeUpdate(DocumentEvent e) {
+                    if (e.getDocument().getLength() <= 0 && isTyping) {
+                        thread.send(new Message()
+                                .withType(NOT_TYPING)
+                                .withSourceUser(sourceUserName)
+                                .withTargetUser(targetUserName));
+                        isTyping = false;
+                    }
+                }
+                @Override
+                public void changedUpdate(DocumentEvent e) {
+                    if (e.getDocument().getLength() > 0 && !isTyping) {
+                        thread.send(new Message()
+                                .withType(TYPING)
+                                .withSourceUser(sourceUserName)
+                                .withTargetUser(targetUserName));
+                        isTyping = true;
+                    }
+                }
+            });
 
             final JButton sendButton = new JButton("Send Message");
             sendButton.addActionListener(event -> {
@@ -149,6 +237,8 @@ public class Client {
                             .withSourceUser(sourceUserName)
                             .withTargetUser(targetUserName)
                             .withText(messageBox.getText()));
+                    chatBox.append(String.format("<%s>: %s\n", sourceUserName, messageBox.getText()));
+                    isTyping = false;
                     messageBox.setText("");
                 }
                 messageBox.requestFocusInWindow();
@@ -193,7 +283,6 @@ public class Client {
             mainPanel.add(BorderLayout.SOUTH, southPanel);
 
             chatFrame.add(mainPanel);
-            chatFrame.setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
             chatFrame.setSize(470, 300);
             chatFrame.setVisible(true);
         }
