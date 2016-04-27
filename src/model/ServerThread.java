@@ -19,30 +19,30 @@ import static model.enums.MessageTypeEnum.LOGIN_DENIED;
 import static model.enums.MessageTypeEnum.SESSION_EXIT;
 
 /**
- * Represents a connection to an active user.
- * Messages received from this user are parsed and handled by the server which may result in messages being sent back to the user.
+ * Represents a connection to an active user that can send and receive messages to that user and to other active users
+ * via the server.
  */
 public class ServerThread extends Thread {
     private int threadId;
     private String userName;
     private Server server;
     private Socket socket;
-    private DataInputStream streamIn;
-    private DataOutputStream streamOut;
+    private DataInputStream in;
+    private DataOutputStream out;
     private boolean run;
 
     private static String SERVER = "server";
 
     public ServerThread(final Server server,
                         final Socket socket,
-                        final DataInputStream streamIn,
-                        final DataOutputStream streamOut) {
+                        final DataInputStream in,
+                        final DataOutputStream out) {
         super();
         this.threadId = socket.getPort();
         this.server = server;
         this.socket = socket;
-        this.streamIn = streamIn;
-        this.streamOut = streamOut;
+        this.in = in;
+        this.out = out;
         this.userName = null;
         this.run = true;
         start();
@@ -61,27 +61,31 @@ public class ServerThread extends Thread {
             receive();
         }
     }
+    private void receive() {
+        try {
+            final String message = in.readUTF();
+            System.out.println("Server received: " + message);
+            processMessage(toMessage(message));
+        } catch (IOException e) {
+            System.out.println("Error in ServerThread.receive: " + e.getMessage());
+            close();
+        }
+    }
 
     // Synchronize on this in case multiple other server threads are trying to forward messages.
     public synchronized void send(final Message message) {
         try {
-            streamOut.writeUTF(message.toString());
-            streamOut.flush();
+            final String send = message.toString();
+            System.out.println("Server sent: " + send);
+            out.writeUTF(send);
+            out.flush();
         } catch (IOException e) {
             System.out.println("Error in ServerThread.send: " + e.getMessage());
-            server.removeThread(this);
+            close();
         }
     }
 
-    public void receive() {
-        try {
-            processMessage(toMessage(streamIn.readUTF()));
-        } catch (IOException e) {
-            System.out.println("Error in ServerThread.receive: " + e.getMessage());
-            server.removeThread(this);
-        }
-    }
-
+    // Depending on the message type and information, will send a message back to the current user or forward it to the target user.
     private void processMessage(final Message message) {
         if (null == message) {
             send(new Message()
@@ -108,7 +112,7 @@ public class ServerThread extends Thread {
                             .withTargetUser(message.getSourceUser())
                             .withText("Username already exists."));
                 } else {
-                    server.addActiveUser(message.getSourceUser());
+                    server.getActiveUsers().add(message.getSourceUser());
                     this.userName = message.getSourceUser();
                     send(new Message()
                             .withType(LOGIN_ACK)
@@ -168,8 +172,8 @@ public class ServerThread extends Thread {
                 forwardMessageIfInSession(targetUserName, target, message);
                 break;
             case LOGOUT:
-                server.removeThread(this);
-                close();
+                server.getActiveUsers().remove(userName);
+                userName = null;
                 break;
             default:
                 send(new Message()
@@ -248,15 +252,16 @@ public class ServerThread extends Thread {
             if (null != socket) {
                 socket.close();
             }
-            if (null != streamIn) {
-                streamIn.close();
+            if (null != in) {
+                in.close();
             }
-            if (null != streamOut) {
-                streamOut.close();
+            if (null != out) {
+                out.close();
             }
         } catch (IOException e) {
             System.out.println("Error in ServerThread.close: " + e.getMessage());
         }
+        server.removeThread(this);
         run = false;
         userName = null;
     }

@@ -4,6 +4,8 @@ import javax.swing.*;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
 import java.awt.*;
+import java.awt.event.WindowAdapter;
+import java.awt.event.WindowEvent;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
@@ -12,14 +14,24 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 
+import static javax.swing.JOptionPane.showConfirmDialog;
 import static model.enums.MessageTypeEnum.GET_USERS;
 import static model.enums.MessageTypeEnum.INVITE;
 import static model.enums.MessageTypeEnum.LOGIN;
+import static model.enums.MessageTypeEnum.LOGOUT;
 import static model.enums.MessageTypeEnum.MESSAGE;
 import static model.enums.MessageTypeEnum.NOT_TYPING;
 import static model.enums.MessageTypeEnum.SESSION_EXIT;
 import static model.enums.MessageTypeEnum.TYPING;
 
+/**
+ * A GUI that allows for a user to:
+ *  - Connect to the server with a username of their choosing.
+ *  - View other active users.
+ *  - Invite one or more active users to a 1 on 1 chat.
+ *  - Send messages back and forth.
+ *  - Logout and back in with a new username.
+ */
 public class Client {
 
     private Socket socket;
@@ -61,6 +73,7 @@ public class Client {
             sourceUserName = loginNameField.getText();
             if (sourceUserName.length() > 1) {
                 thread.send(new Message().withType(LOGIN).withSourceUser(sourceUserName));
+                loginNameField.setText("");
             }
         });
 
@@ -88,36 +101,51 @@ public class Client {
                     listModel.addElement(userName);
                 }
             }
+
+            // Redo these in case we are coming from a logout.
+            mainFrame.setTitle(sourceUserName + ": Active Users List");
+            mainFrame.setVisible(true);
+            loginFrame.setVisible(false);
             return;
         }
 
         listModel = new DefaultListModel<>();
-        final JList<String> userNameList = new JList<>(listModel);
-        final JButton refreshButton = new JButton("Refresh");
-        final JButton inviteButton = new JButton("Invite");
-
         for (String userName : userNames) {
             if (!sourceUserName.equals(userName)) {
                 listModel.addElement(userName);
             }
         }
 
+        final JList<String> userNameList = new JList<>(listModel);
         userNameList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         userNameList.setSelectedIndex(0);
         userNameList.setVisibleRowCount(5);
 
         // Set up refresh button.
+        final JButton refreshButton = new JButton("Refresh");
         refreshButton.setActionCommand("Refresh");
         refreshButton.addActionListener(event -> thread.send(new Message()
                 .withType(GET_USERS)
                 .withSourceUser(sourceUserName)));
 
         // Set up Invite button.
+        final JButton inviteButton = new JButton("Invite");
         inviteButton.setActionCommand("Invite");
         inviteButton.addActionListener(event -> thread.send(new Message()
                 .withType(INVITE)
                 .withSourceUser(sourceUserName)
                 .withTargetUser(userNameList.getSelectedValue())));
+
+        // Set up Logout button.
+        final JButton logoutButton = new JButton("Logout");
+        logoutButton.setActionCommand("Logout");
+        logoutButton.addActionListener(event -> {
+            thread.send(new Message()
+                    .withType(LOGOUT)
+                    .withSourceUser(sourceUserName));
+            mainFrame.setVisible(false);
+            loginFrame.setVisible(true);
+        });
 
         // Add everything to the content pane.
         final JPanel buttonPane = new JPanel();
@@ -127,6 +155,10 @@ public class Client {
         buttonPane.add(new JSeparator(SwingConstants.VERTICAL));
         buttonPane.add(Box.createHorizontalStrut(5));
         buttonPane.add(inviteButton);
+        buttonPane.add(Box.createHorizontalStrut(5));
+        buttonPane.add(new JSeparator(SwingConstants.VERTICAL));
+        buttonPane.add(Box.createHorizontalStrut(5));
+        buttonPane.add(logoutButton);
         buttonPane.setBorder(BorderFactory.createEmptyBorder(5,5,5,5));
 
         final JPanel newContentPane = new JPanel(new BorderLayout());
@@ -142,8 +174,8 @@ public class Client {
     }
 
     public int displayInvite(final String userName) {
-        return JOptionPane.showConfirmDialog(mainFrame,
-                "Incoming chat request from " +userName+ ".  Accept?",
+        return showConfirmDialog(mainFrame,
+                "Incoming chat request from " + userName + ".  Accept?",
                 "Chat request",
                 JOptionPane.YES_NO_OPTION);
     }
@@ -238,19 +270,9 @@ public class Client {
                             .withTargetUser(targetUserName)
                             .withText(messageBox.getText()));
                     chatBox.append(String.format("<%s>: %s\n", sourceUserName, messageBox.getText()));
-                    isTyping = false;
                     messageBox.setText("");
                 }
                 messageBox.requestFocusInWindow();
-            });
-
-            final JButton exitButton = new JButton("Close Chat");
-            exitButton.addActionListener(event -> {
-                thread.send(new Message()
-                        .withType(SESSION_EXIT)
-                        .withSourceUser(sourceUserName)
-                        .withTargetUser(targetUserName));
-                chatFrame.setVisible(false);
             });
 
             chatBox = new JTextArea();
@@ -283,6 +305,18 @@ public class Client {
             mainPanel.add(BorderLayout.SOUTH, southPanel);
 
             chatFrame.add(mainPanel);
+            chatFrame.addWindowListener(new WindowAdapter() {
+                @Override
+                public void windowClosing(WindowEvent windowEvent) {
+                    if (0 == showConfirmDialog(chatFrame, "Are you sure to close this chat?", "", JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE)) {
+                        thread.send(new Message()
+                                .withType(SESSION_EXIT)
+                                .withSourceUser(sourceUserName)
+                                .withTargetUser(targetUserName));
+                        chatFrame.setVisible(false);
+                    }
+                }
+            });
             chatFrame.setSize(470, 300);
             chatFrame.setVisible(true);
         }

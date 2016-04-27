@@ -16,16 +16,13 @@ import static javax.swing.UIManager.setLookAndFeel;
  */
 public class ClientStart {
     public static void main(final String args[]) throws IOException {
-        SwingUtilities.invokeLater(new Runnable() {
-            @Override
-            public void run() {
-                try {
-                    setLookAndFeel(getSystemLookAndFeelClassName());
-                    final Socket socket = new Socket("localhost", 1234);
-                    new Client(socket, new DataInputStream(socket.getInputStream()), new DataOutputStream(socket.getOutputStream()));
-                } catch (Exception e) {
-                    System.out.println("Error in ClientStart.main: " + e.getMessage());
-                }
+        SwingUtilities.invokeLater(() -> {
+            try {
+                setLookAndFeel(getSystemLookAndFeelClassName());
+                final Socket socket = new Socket("localhost", 1234);
+                new Client(socket, new DataInputStream(socket.getInputStream()), new DataOutputStream(socket.getOutputStream()));
+            } catch (Exception e) {
+                System.out.println("Error in ClientStart.main: " + e.getMessage());
             }
         });
     }

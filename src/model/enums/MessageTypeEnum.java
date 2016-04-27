@@ -21,7 +21,7 @@ public enum MessageTypeEnum {
     NOT_TYPING("NOT_TYPING"),           // Indicates that a user has stopped typing.
     TEXT_CLEARED("TEXT_CLEARED"),       // Indicates that a user no longer has text in their prompt.
     MESSAGE("MESSAGE"),                 // Sends a message to the other user in a session.
-    LOGOUT("LOGOUT");                    // Sent before terminating a client connection, setting the user name status to offline.
+    LOGOUT("LOGOUT");                   // Sent before terminating a client connection, setting the user name status to offline.
 
     private final String value;
     private static EnumSet<MessageTypeEnum> FULL_SET = EnumSet.allOf(MessageTypeEnum.class);

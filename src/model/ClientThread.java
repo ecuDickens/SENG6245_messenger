@@ -11,6 +11,9 @@ import static model.enums.MessageTypeEnum.GET_USERS;
 import static model.enums.MessageTypeEnum.INVITE_ACCEPT;
 import static model.enums.MessageTypeEnum.INVITE_DECLINE;
 
+/**
+ * Represents a connection to the server that can send and receive messages targeted at the server or at another user.
+ */
 public class ClientThread extends Thread {
     private Client client;
     private DataInputStream in;
@@ -36,7 +39,9 @@ public class ClientThread extends Thread {
 
     public void send(final Message message) {
         try {
-            out.writeUTF(message.toString());
+            final String send = message.toString();
+            System.out.println("Client sent: " + send);
+            out.writeUTF(send);
             out.flush();
         } catch (IOException e) {
             System.out.println("Error in ClientReceiveThread.send: " + e.getMessage());
@@ -46,7 +51,9 @@ public class ClientThread extends Thread {
 
     public void receive() {
         try {
-            processMessage(toMessage(in.readUTF()));
+            final String message = in.readUTF();
+            System.out.println("Client received: " + message);
+            processMessage(toMessage(message));
         } catch (IOException e) {
             System.out.println("Error in ClientReceiveThread.receive: " + e.getMessage());
             client.stop();
@@ -91,7 +98,7 @@ public class ClientThread extends Thread {
                 client.alert(client.getMainFrame(), null, message.getSourceUser() + " declined your chat request.");
                 break;
             case SESSION_EXIT:
-                client.alert(client.getChatFrame(message.getSourceUser()), null, message.getSourceUser() + " declined your chat request.");
+                client.alert(client.getChatFrame(message.getSourceUser()), null, message.getSourceUser() + " closed this chat.");
                 break;
             case TYPING:
                 client.getChatFrame(message.getSourceUser()).setTitle(client.getSourceUserName() + " -> " + message.getSourceUser() + " is typing");

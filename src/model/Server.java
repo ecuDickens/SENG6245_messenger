@@ -17,18 +17,18 @@ import java.util.Optional;
 import java.util.Set;
 
 /**
- * This class manages the server side logic, which includes starting new threads as users connect that receive messages
- * from them, parses the message, and then takes action depending on the type of message.  Users can then connect to and
- * talk with other users through a managed session.  While the server is active all chat history is saved within
- * the session.
+ * This class manages the thread pool of user connections, active user names, and sessions between users.  Communication between
+ * server and clients is defined by the messaging enums in MessageTypeEnum.
  *
- * See MessageTypeEnum for the list of allowable events and what they signify.
+ * The methods provided on this class are mostly to facilitate passing messages between users.  The synchronized keyword
+ * is used on several methods to ensure that the accessed information isn't corrupted due to multiple server thread requests.
  */
 public class Server extends Thread {
 
     // The map of currently active users by their sessionId.
     private Map<Integer, ServerThread> threadIdToUser;
-    // The set of user names that are currently active.
+    // The set of user names that are currently active (could be different from the map values
+    // because a user may not have logged in yet with a user name).
     private Set<String> activeUsers;
     // The map of sessions that have been started while this server has been running.
     private Map<String, Session> idToSession;
@@ -55,15 +55,27 @@ public class Server extends Thread {
             }
         }
     }
+    private synchronized void addThread(final Socket socket) {
+        try {
+            final ServerThread thread = new ServerThread(this, socket,
+                    new DataInputStream(new BufferedInputStream(socket.getInputStream())),
+                    new DataOutputStream(new BufferedOutputStream(socket.getOutputStream())));
+            System.out.println("Connected to new client: " + thread.getThreadId());
+            threadIdToUser.put(thread.getThreadId(), thread);
+        } catch (IOException e) {
+            System.out.println("Error in ServerThreadPool.addThread: " + e.getMessage());
+        }
+    }
 
-    public Set<String> getActiveUsers() {
+    public synchronized void removeThread(final ServerThread thread) {
+        System.out.println("Disconnecting from client: " +thread.getThreadId());
+        activeUsers.remove(thread.getUserName());
+        threadIdToUser.remove(thread.getThreadId());
+    }
+
+    public synchronized Set<String> getActiveUsers() {
         return activeUsers;
     }
-
-    public synchronized void addActiveUser(final String userName) {
-        activeUsers.add(userName);
-    }
-
     public synchronized ServerThread getUserByUserName(final String userName) {
         final Optional<ServerThread> match = threadIdToUser.values().stream().filter(u -> userName.equals(u.getUserName())).findFirst();
         if (match.isPresent()) {
@@ -72,9 +84,10 @@ public class Server extends Thread {
         return null;
     }
 
-    // Create a session or reactivates an old session.
+    // Create a session or reactivates an existing session.
     public synchronized void activateSession(final String userNameA, final String userNameB) {
         final String sessionId = getSessionId(userNameA, userNameB);
+        System.out.println("Activating session " + sessionId);
         if (!idToSession.containsKey(sessionId)) {
             idToSession.put(sessionId, new Session().withId(sessionId).withLog(new ArrayList<>()).withStatus(SessionStatusEnum.ACTIVE));
         } else {
@@ -85,6 +98,7 @@ public class Server extends Thread {
     // Deactivates a session if either user leaves it.
     public synchronized void deActivateSession(final String userNameA, final String userNameB) {
         final String sessionId = getSessionId(userNameA, userNameB);
+        System.out.println("Deactivating session " + sessionId);
         if (idToSession.containsKey(sessionId)) {
             idToSession.get(sessionId).setStatus(SessionStatusEnum.INACTIVE);
         }
@@ -120,22 +134,5 @@ public class Server extends Thread {
             System.out.println("Error in ServerThreadPool.close: " + e.getMessage());
         }
         run = false;
-    }
-
-    public synchronized void addThread(final Socket socket) {
-        try {
-            final ServerThread serverThread = new ServerThread(this, socket,
-                    new DataInputStream(new BufferedInputStream(socket.getInputStream())),
-                    new DataOutputStream(new BufferedOutputStream(socket.getOutputStream())));
-            threadIdToUser.put(serverThread.getThreadId(), serverThread);
-        } catch (IOException e) {
-            System.out.println("Error in ServerThreadPool.addThread: " + e.getMessage());
-        }
-    }
-
-    public synchronized void removeThread(final ServerThread thread) {
-        activeUsers.remove(thread.getUserName());
-        threadIdToUser.remove(thread.getThreadId());
-        thread.close();
     }
 }
