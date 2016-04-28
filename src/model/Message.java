@@ -114,4 +114,16 @@ public class Message {
                 .withTargetUser(targetUserName)
                 .withText(text);
     }
+
+    @Override
+    public boolean equals(final Object obj) {
+        if (obj instanceof Message) {
+            final Message message = (Message) obj;
+            return type == message.getType() &&
+                    sourceUser.equals(message.getSourceUser()) &&
+                    targetUser.equals(message.getTargetUser()) &&
+                    text.equals(message.getText());
+        }
+        return false;
+    }
 }
