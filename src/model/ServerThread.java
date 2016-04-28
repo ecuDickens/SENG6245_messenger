@@ -156,7 +156,7 @@ public class ServerThread extends Thread {
                 break;
             case SESSION_EXIT:
                 server.deActivateSession(userName, message.getText());
-                forwardMessage(targetUserName, target, message);
+                forwardMessageIfInSession(targetUserName, target, message);
                 break;
             case TYPING:
                 forwardMessageIfInSession(targetUserName, target, message);
