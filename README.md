@@ -25,4 +25,9 @@ Running:
 First, run the main method in the ServerStart class to get the server running and acception connections.  Then run the main method in the ClientStart class as many times as desired to spin up multiple chat applications. 
 
 Further work:
-There are a lot of improvements that I would want to implement if I revisited this project.  I'd like to get more familiar with Swing and optimize how the graphical elements are designed and flow from one state to the other (starting with having the chat application be one dynamic window). I'd like to add actual persistence to the chat history and user names by integrating with a database.  I would add persistent chat rooms in addition to the 1 on 1 sessions. Finally, I got around to testing last and did not have time to develop the mocks needed to properly unit test the socket messaging.
+There are a lot of improvements that I would want to implement if I revisited this project. 
+ - Right now the server and clients all run on localhost only, I would update that to be able to specify an ip address as well.
+ - I'd like to get more familiar with Swing and optimize how the graphical elements are designed and flow from one state to the other (starting with having the chat application be one dynamic window). 
+ - I'd like to add actual persistence to the chat history and user names by integrating with a database.  
+ - I would add persistent chat rooms in addition to the 1 on 1 sessions. 
+ - Finally, I got around to testing last and did not have time to develop the mocks needed to properly unit test the socket messaging.
